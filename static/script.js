@@ -1,17 +1,9 @@
 async function getWeather() {
 
-    // --------------------------------------------
-    // 1. Get city from input box
-    // --------------------------------------------
-
     const cityInput = document.getElementById("cityInput");
 
     const city = cityInput.value.trim();
 
-
-    // --------------------------------------------
-    // 2. Check whether user entered a city
-    // --------------------------------------------
 
     if (city === "") {
 
@@ -22,36 +14,21 @@ async function getWeather() {
     }
 
 
-    // Show loading message
-
     document.getElementById("message").textContent =
         "Loading...";
 
 
-    // --------------------------------------------
-    // 3. Call our Flask backend
-    // --------------------------------------------
-
     const url =
-    "/api/weather?city=" +
-    encodeURIComponent(city);
+        "/api/weather?city=" +
+        encodeURIComponent(city);
 
 
     try {
 
         const response = await fetch(url);
 
-
-        // ----------------------------------------
-        // 4. Convert response JSON into JS object
-        // ----------------------------------------
-
         const data = await response.json();
 
-
-        // ----------------------------------------
-        // 5. Check for errors
-        // ----------------------------------------
 
         if (!response.ok) {
 
@@ -61,10 +38,6 @@ async function getWeather() {
             return;
         }
 
-
-        // ----------------------------------------
-        // 6. Display data
-        // ----------------------------------------
 
         document.getElementById("city").textContent =
             `${data.city}, ${data.country}`;
