@@ -1,13 +1,31 @@
 from flask import Flask, jsonify, request, render_template
 import requests
+import os
+from dotenv import load_dotenv
+
+# Load variables from .env
+load_dotenv()
 
 app = Flask(__name__)
 
+# Get WeatherAPI key from environment variable
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
+
+WEATHER_API_URL = "https://api.weatherapi.com/v1/current.json"
+
+
+# --------------------------------------------------
+# HOME PAGE
+# --------------------------------------------------
 
 @app.route("/")
 def home():
     return render_template("index.html")
 
+
+# --------------------------------------------------
+# TEST API
+# --------------------------------------------------
 
 @app.route("/api/hello", methods=["GET"])
 def hello():
@@ -17,8 +35,19 @@ def hello():
     })
 
 
+# --------------------------------------------------
+# WEATHER API
+# --------------------------------------------------
+
 @app.route("/api/weather", methods=["GET"])
 def get_weather():
+
+    # ----------------------------------------------
+    # 1. Get city from our URL
+    #
+    # Example:
+    # /api/weather?city=London
+    # ----------------------------------------------
 
     city = request.args.get("city")
 
@@ -28,122 +57,116 @@ def get_weather():
         }), 400
 
 
-    # -------------------------------
-    # Find city coordinates
-    # -------------------------------
+    # ----------------------------------------------
+    # 2. Check whether API key exists
+    # ----------------------------------------------
 
-    geocoding_url = (
-        "https://geocoding-api.open-meteo.com/v1/search"
-    )
+    if not WEATHER_API_KEY:
 
-    geocoding_params = {
-        "name": city,
-        "count": 1,
-        "language": "en",
-        "format": "json"
+        return jsonify({
+            "error": "Weather API key is not configured"
+        }), 500
+
+
+    # ----------------------------------------------
+    # 3. Prepare parameters for WeatherAPI
+    # ----------------------------------------------
+
+    params = {
+        "key": WEATHER_API_KEY,
+        "q": city,
+        "aqi": "no"
     }
 
-    geocoding_response = requests.get(
-        geocoding_url,
-        params=geocoding_params
-    )
 
-    if geocoding_response.status_code != 200:
-        return jsonify({
-        "error": "Could not contact geocoding service",
-        "status_code": geocoding_response.status_code,
-        "response": geocoding_response.text
-    }), 500
+    # ----------------------------------------------
+    # 4. Send request to WeatherAPI
+    # ----------------------------------------------
 
+    try:
 
-    geocoding_data = geocoding_response.json()
-
-
-    if "results" not in geocoding_data:
-
-        return jsonify({
-            "error": f"City '{city}' was not found"
-        }), 404
-
-
-    location = geocoding_data["results"][0]
-
-    latitude = location["latitude"]
-    longitude = location["longitude"]
-
-    city_name = location["name"]
-
-    country = location.get("country", "")
-
-
-    # -------------------------------
-    # Get weather
-    # -------------------------------
-
-    weather_url = (
-        "https://api.open-meteo.com/v1/forecast"
-    )
-
-    weather_params = {
-
-        "latitude": latitude,
-
-        "longitude": longitude,
-
-        "current": (
-            "temperature_2m,"
-            "relative_humidity_2m,"
-            "weather_code,"
-            "wind_speed_10m"
+        response = requests.get(
+            WEATHER_API_URL,
+            params=params,
+            timeout=10
         )
-    }
 
-    weather_response = requests.get(
-        weather_url,
-        params=weather_params
-    )
+    except requests.RequestException:
 
-
-    if weather_response.status_code != 200:
         return jsonify({
-        "error": "Could not retrieve weather",
-        "status_code": weather_response.status_code,
-        "response": weather_response.text
-    }), 500
+            "error": "Could not connect to WeatherAPI"
+        }), 502
 
 
-    weather_data = weather_response.json()
+    # ----------------------------------------------
+    # 5. Handle errors from WeatherAPI
+    # ----------------------------------------------
 
+    if response.status_code != 200:
+
+        try:
+            error_data = response.json()
+        except ValueError:
+            error_data = {}
+
+        error_message = (
+            error_data
+            .get("error", {})
+            .get("message", "Weather service returned an error")
+        )
+
+        return jsonify({
+            "error": error_message
+        }), response.status_code
+
+
+    # ----------------------------------------------
+    # 6. Convert JSON into Python dictionary
+    # ----------------------------------------------
+
+    weather_data = response.json()
+
+
+    # ----------------------------------------------
+    # 7. Extract the data we need
+    # ----------------------------------------------
+
+    location = weather_data["location"]
     current = weather_data["current"]
 
 
-    # -------------------------------
-    # Prepare response
-    # -------------------------------
-
     result = {
 
-        "city": city_name,
+        "city": location["name"],
 
-        "country": country,
+        "country": location["country"],
 
-        "temperature":
-            current["temperature_2m"],
+        "temperature": current["temp_c"],
 
-        "humidity":
-            current["relative_humidity_2m"],
+        "humidity": current["humidity"],
 
-        "wind_speed":
-            current["wind_speed_10m"],
+        "wind_speed": current["wind_kph"],
 
-        "weather_code":
-            current["weather_code"]
+        "condition": current["condition"]["text"],
+
+        "icon": current["condition"]["icon"],
+
+        "feels_like": current["feelslike_c"],
+
+        "uv": current["uv"]
     }
 
+
+    # ----------------------------------------------
+    # 8. Send our own JSON response
+    # ----------------------------------------------
 
     return jsonify(result)
 
 
-if __name__ == "__main__":
+# --------------------------------------------------
+# START SERVER
+# --------------------------------------------------
 
+if __name__ == "__main__":
     app.run(debug=True)
