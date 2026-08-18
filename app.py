@@ -49,10 +49,11 @@ def get_weather():
     )
 
     if geocoding_response.status_code != 200:
-
         return jsonify({
-            "error": "Could not contact geocoding service"
-        }), 500
+        "error": "Could not contact geocoding service",
+        "status_code": geocoding_response.status_code,
+        "response": geocoding_response.text
+    }), 500
 
 
     geocoding_data = geocoding_response.json()
@@ -104,10 +105,11 @@ def get_weather():
 
 
     if weather_response.status_code != 200:
-
         return jsonify({
-            "error": "Could not retrieve weather"
-        }), 500
+        "error": "Could not retrieve weather",
+        "status_code": weather_response.status_code,
+        "response": weather_response.text
+    }), 500
 
 
     weather_data = weather_response.json()
@@ -144,4 +146,4 @@ def get_weather():
 
 if __name__ == "__main__":
 
-    app.run(debug=True)
+    app.run(debug=True)–
